@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organizador de Descripciones Excel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #eef2f3, #8e9eab);
+      color: #333;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+      text-align: center;
+      color: #222;
+    }
+
+    p.description {
+      max-width: 700px;
+      text-align: center;
+      margin-bottom: 2rem;
+      font-size: 1.1rem;
+    }
+
+    input[type="file"], button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin: 0.5rem;
+    }
+
+    input[type="file"] {
+      background-color: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      background-color: #0066ff;
+      color: white;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 102, 255, 0.3);
+    }
+
+    button:hover {
+      background-color: #004fc1;
+      transform: scale(1.03);
+    }
+
+    .status {
+      margin-top: 1rem;
+      font-weight: bold;
+      color: #007bff;
+      opacity: 0;
+      transition: opacity 0.4s ease-in-out;
+    }
+
+    .status.visible {
+      opacity: 1;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    @media (max-width: 600px) {
+      p.description {
+        font-size: 1rem;
+        padding: 0 1rem;
+      }
+
+      input[type="file"], button {
+        width: 90%;
+        margin: 0.3rem auto;
+      }
+
+      .button-group {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Organizador de Descripciones Excel</h1>
+  <p class="description">
+    Esta herramienta reorganiza automáticamente la columna <strong>descripcion</strong> de tu archivo Excel.
+    Detecta la palabra que está antes de un bloque como <code>Q24M1</code> (indicador de cantidad) y la mueve al comienzo del texto. 
+    Subí tu archivo, hacé clic en "Convertir" y luego descargá o imprimí el archivo procesado.
+  </p>
+
+  <input type="file" id="excelFile" accept=".xlsx" />
+  <div class="button-group">
+    <button onclick="convertExcel()">Convertir</button>
+    <button onclick="window.print()">Imprimir</button>
+  </div>
+
+  <div class="status" id="statusMsg">Procesando archivo...</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    function showStatus(message) {
+      const el = document.getElementById("statusMsg");
+      el.textContent = message;
+      el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 3000);
+    }
+
+    function moverBloqueAntesDeQ(texto) {
+      if (typeof texto !== 'string') return texto;
+      const bloques = texto.trim().split(/\s+/);
+      const indexQ = bloques.findIndex(t => /^Q[\d\/\.]+(M\d+)?$/i.test(t));
+      if (indexQ <= 0) return texto; // No mover si Q no está o es el primer bloque
+
+      const bloqueAntes = bloques[indexQ - 1];
+      const nuevosBloques = bloques.filter((_, idx) => idx !== indexQ - 1);
+      return [bloqueAntes, ...nuevosBloques].join(" ");
+    }
+
+    function convertExcel() {
+      const file = document.getElementById("excelFile").files[0];
+      if (!file) return alert("Subí un archivo primero.");
+
+      showStatus("Procesando archivo...");
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!json[0].hasOwnProperty("descripcion")) {
+          alert("No se encontró la columna 'descripcion'");
+          return;
+        }
+
+        for (let i = 0; i < json.length; i++) {
+          json[i].descripcion = moverBloqueAntesDeQ(json[i].descripcion);
+        }
+
+        const newSheet = XLSX.utils.json_to_sheet(json);
+        const newWb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWb, newSheet, "Hoja 1");
+
+        XLSX.writeFile(newWb, "archivo_modificado.xlsx");
+        showStatus("Archivo listo para descargar ✅");
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>
